@@ -41,7 +41,7 @@ post_compile(Config, AppFile) ->
     %% timestamp is really important from an ordering perspective.
     {ok, RawRef} = rebar_utils:sh("git log -n 1 --pretty=format:'%ct.%h\n' .", []),
     {ok, RawTag} = rebar_utils:sh("git describe --always --abbrev=0 --tags "
-                                  "`git log -n 1 --pretty=format:%h .`", []),
+                                  "`git log -n 1 --pretty=format:%h`", []),
 
     %% Cleanup the tag and the Ref information. Basically leading 'v's and
     %% whitespace needs to go away.
