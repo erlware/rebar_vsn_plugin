@@ -28,10 +28,20 @@
 %%============================================================================
 %% API
 %%============================================================================
-
 post_compile(Config, AppFile) ->
-    {ok, [{application, AppName, _}]} = file:consult(AppFile),
+    {ok, [{application, AppName, SrcDetail}]} = file:consult(AppFile),
+    case proplists:get_value(vsn, SrcDetail) of
+        semver ->
+            do_vsn_replacement(AppName, Config, AppFile);
+        _ ->
+            ok
+    end.
 
+%%============================================================================
+%% Internal Functions
+%%============================================================================
+
+do_vsn_replacement(AppName, Config, AppFile) ->
     EbinAppFile= filename:join("ebin", erlang:atom_to_list(AppName) ++ ".app"),
 
     {AppName, Details0} =
