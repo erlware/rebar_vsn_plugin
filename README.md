@@ -22,6 +22,27 @@ Then inform rebar that you want this to be used as a plugin like so:
 
     {plugins, [rebar_vsn_plugin]}.
 
+Then add the semver version to the `<app-name>.app.src` file. It should go from something like
+
+    {application, rebar_vsn_plugin,
+       [{description, "Correct version manipulation for rebar"},
+        {vsn, git},
+        {modules, []},
+        {registered, []},
+        {applications, [kernel, stdlib]}]}.
+
+to this:
+
+    {application, rebar_vsn_plugin,
+       [{description, "Correct version manipulation for rebar"},
+        {vsn, semver},
+        {modules, []},
+        {registered, []},
+        {applications, [kernel, stdlib]}]}.
+
+The key change is the `{vsn, "semver"}` change. This tells the plugin
+that it needs to replace the version in this app with the tag + ref
+version it employs.
 
 Explanation
 -------------
