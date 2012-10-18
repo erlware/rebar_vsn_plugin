@@ -29,7 +29,8 @@
 %% API
 %%============================================================================
 post_compile(Config, AppFile) ->
-    {ok, [{application, AppName, SrcDetail}]} = file:consult(AppFile),
+    {AppName, SrcDetail} =
+        rebar_config:get_xconf(Config, {appfile, {app_file, AppFile}}, []),
     case proplists:get_value(vsn, SrcDetail) of
         "semver" ->
             do_vsn_replacement(AppName, Config, AppFile);
