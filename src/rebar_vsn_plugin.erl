@@ -58,7 +58,7 @@ do_vsn_replacement(AppName, Config, AppFile) ->
     RawCount =
         case Tag of
             undefined ->
-                os:cmd(lists:flatten(io_lib:format("git rev-list HEAD | wc -l")));
+                os:cmd("git rev-list HEAD | wc -l");
             _ ->
                 os:cmd(lists:flatten(io_lib:format("git rev-list ~s..HEAD | wc -l",
                                                    [Tag])))
