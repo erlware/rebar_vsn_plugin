@@ -29,8 +29,11 @@
 %% API
 %%============================================================================
 post_compile(Config, AppFile) ->
-    {ok, [{application, AppName, SrcDetail}]} = file:consult(AppFile),
+    {AppName, SrcDetail} =
+        rebar_config:get_xconf(Config, {appfile, {app_file, AppFile}}, []),
     case proplists:get_value(vsn, SrcDetail) of
+        "semver" ->
+            do_vsn_replacement(AppName, Config, AppFile);
         semver ->
             do_vsn_replacement(AppName, Config, AppFile);
         _ ->
@@ -49,17 +52,31 @@ do_vsn_replacement(AppName, Config, AppFile) ->
 
     %% Get the tag timestamp and minimal ref from the system. The
     %% timestamp is really important from an ordering perspective.
-    {ok, RawRef} = rebar_utils:sh("git log -n 1 --pretty=format:'%ct.%h\n' .", []),
-    {ok, RawTag} = rebar_utils:sh("git describe --always --abbrev=0 --tags "
-                                  "`git log -n 1 --pretty=format:%h`", []),
+    RawRef = os:cmd("git log -n 1 --pretty=format:'%h\n' "),
+
+    {Tag, TagVsn} = parse_tags(),
+    RawCount =
+        case Tag of
+            undefined ->
+                os:cmd(lists:flatten(io_lib:format("git rev-list HEAD | wc -l")));
+            _ ->
+                os:cmd(lists:flatten(io_lib:format("git rev-list ~s..HEAD | wc -l",
+                                                   [Tag])))
+        end,
 
     %% Cleanup the tag and the Ref information. Basically leading 'v's and
     %% whitespace needs to go away.
-    Tag = re:replace(RawTag, "(^v)|\\s", "", [global]),
     Ref = re:replace(RawRef, "\\s", "", [global]),
+    Count = erlang:iolist_to_binary(re:replace(RawCount, "\\s", "", [global])),
 
     %% Create the valid [semver](http://semver.org) version from the tag
-    Vsn = erlang:binary_to_list(erlang:iolist_to_binary([Tag, "+build.", Ref])),
+    Vsn = case Count of
+              <<"0">> ->
+                  erlang:binary_to_list(erlang:iolist_to_binary(TagVsn));
+              _ ->
+                  erlang:binary_to_list(erlang:iolist_to_binary([TagVsn, "+build.",
+                                                                 Count, ".", Ref]))
+          end,
 
     %% Replace the old version with the new one
     Details1 = lists:keyreplace(vsn, 1, Details0, {vsn, Vsn}),
@@ -75,3 +92,14 @@ do_vsn_replacement(AppName, Config, AppFile) ->
 write_app_file(AppFile, AppTerms) ->
     AppHeader = "%%% -*- mode: Erlang; fill-column: 80; comment-column: 75; -*-\n\n",
     file:write_file(AppFile, [AppHeader, io_lib:fwrite("~p. ", [AppTerms])]).
+
+parse_tags() ->
+    first_valid_tag(os:cmd("git log --oneline --decorate  | fgrep \"tag: \" -1000")).
+
+first_valid_tag(Line) ->
+    case re:run(Line, "(\\(|\\s)tag:\\s(v([^,\\)]+))", [{capture, [2, 3], list}]) of
+        {match,[Tag, Vsn]} ->
+            {Tag, Vsn};
+        nomatch ->
+            {undefined, "0.0.0"}
+    end.
