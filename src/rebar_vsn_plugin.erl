@@ -60,8 +60,8 @@ do_vsn_replacement(AppName, Config, AppFile) ->
             undefined ->
                 os:cmd("git rev-list HEAD | wc -l");
             _ ->
-                os:cmd(lists:flatten(io_lib:format("git rev-list ~s..HEAD | wc -l",
-                                                   [Tag])))
+                os:cmd(io_lib:format("git rev-list ~s..HEAD | wc -l",
+                                     [Tag]))
         end,
 
     %% Cleanup the tag and the Ref information. Basically leading 'v's and
