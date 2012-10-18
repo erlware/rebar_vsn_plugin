@@ -31,6 +31,8 @@
 post_compile(Config, AppFile) ->
     {ok, [{application, AppName, SrcDetail}]} = file:consult(AppFile),
     case proplists:get_value(vsn, SrcDetail) of
+        "semver" ->
+            do_vsn_replacement(AppName, Config, AppFile);
         semver ->
             do_vsn_replacement(AppName, Config, AppFile);
         _ ->

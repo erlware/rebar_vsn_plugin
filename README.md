@@ -35,7 +35,7 @@ to this:
 
     {application, rebar_vsn_plugin,
        [{description, "Correct version manipulation for rebar"},
-        {vsn, semver},
+        {vsn, "semver"},
         {modules, []},
         {registered, []},
         {applications, [kernel, stdlib]}]}.
