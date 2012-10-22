@@ -48,7 +48,7 @@ do_vsn_replacement(AppName, Config, AppFile) ->
     EbinAppFile= filename:join("ebin", erlang:atom_to_list(AppName) ++ ".app"),
 
     {AppName, Details0} =
-        rebar_config:get_xconf(Config, {appfile, {app_file, AppFile}}, []),
+        rebar_config:get_xconf(Config, {appfile, {app_file, EbinAppFile}}, []),
 
     %% Get the tag timestamp and minimal ref from the system. The
     %% timestamp is really important from an ordering perspective.
