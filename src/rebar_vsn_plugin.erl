@@ -30,7 +30,7 @@
 %%============================================================================
 post_compile(Config, AppFile) ->
     {AppName, SrcDetail} =
-        rebar_config:get_xconf(Config, {appfile, {app_file, AppFile}}, []),
+        get_app_meta(Config, AppFile),
     case proplists:get_value(vsn, SrcDetail) of
         "semver" ->
             do_vsn_replacement(AppName, Config, AppFile);
@@ -47,8 +47,7 @@ post_compile(Config, AppFile) ->
 do_vsn_replacement(AppName, Config, AppFile) ->
     EbinAppFile= filename:join("ebin", erlang:atom_to_list(AppName) ++ ".app"),
 
-    {AppName, Details0} =
-        rebar_config:get_xconf(Config, {appfile, {app_file, EbinAppFile}}, []),
+    {AppName, Details0} = get_app_meta(Config, EbinAppFile),
 
     %% Get the tag timestamp and minimal ref from the system. The
     %% timestamp is really important from an ordering perspective.
@@ -82,8 +81,7 @@ do_vsn_replacement(AppName, Config, AppFile) ->
     Details1 = lists:keyreplace(vsn, 1, Details0, {vsn, Vsn}),
 
     write_app_file(EbinAppFile, {application, AppName, Details1}),
-    {ok, rebar_config:set_xconf(Config, {appfile, {app_file, AppFile}},
-                                 {AppName, Details1})}.
+    update_config(Config, AppName, AppFile, Details1).
 
 %%============================================================================
 %% Internal Functions
@@ -102,4 +100,26 @@ first_valid_tag(Line) ->
             {Tag, Vsn};
         nomatch ->
             {undefined, "0.0.0"}
+    end.
+
+update_config(Config, AppName, AppFile, Details) ->
+    case lists:member({set_xconf, 3}, rebar_config:module_info(exports)) of
+        true ->
+            {ok, rebar_config:set_xconf(Config, {appfile, {app_file, AppFile}},
+                                        {AppName, Details})};
+        false ->
+            ok
+    end.
+
+get_app_meta(Config, EbinAppFile) ->
+    case lists:member({get_xconf, 2}, rebar_config:module_info(exports)) of
+        true ->
+            rebar_config:get_xconf(Config, {appfile, {app_file, EbinAppFile}}, []);
+        false ->
+            case file:consult(EbinAppFile) of
+                {ok, [{application, AppName, Details}]} ->
+                    {AppName, Details};
+                _ ->
+                    rebar_utils:abort("Unable to read app file ~s~n", [EbinAppFile])
+            end
     end.
