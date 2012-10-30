@@ -64,7 +64,7 @@ $(DEPS_PLT):
 	@echo Building local plt at $(DEPS_PLT)
 	@echo
 	dialyzer --output_plt $(DEPS_PLT) --build_plt \
-	   --apps erts kernel stdlib -r deps
+	   --apps erts kernel stdlib
 
 dialyzer: $(DEPS_PLT)
 	dialyzer --plt $(DEPS_PLT) --fullpath -Wrace_conditions \
