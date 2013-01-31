@@ -95,7 +95,8 @@ parse_tags() ->
     first_valid_tag(os:cmd("git log --oneline --decorate  | fgrep \"tag: \" -1000")).
 
 first_valid_tag(Line) ->
-    case re:run(Line, "(\\(|\\s)tag:\\s(v([^,\\)]+))", [{capture, [2, 3], list}]) of
+    case re:run(Line, "(\\(|\\s)tag:\\s((v([^,\\)]+)|((\\d+)(\\.(\\d+)(\\.(\\d+))?)?)))",
+                [{capture, [2, 3], list}]) of
         {match,[Tag, Vsn]} ->
             {Tag, Vsn};
         nomatch ->
