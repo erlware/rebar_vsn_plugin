@@ -22,6 +22,12 @@ Then inform rebar that you want this to be used as a plugin like so:
 
     {plugins, [rebar_vsn_plugin]}.
 
+In Rebar, to make sure that the plugin is compiled and loaded before
+the actual Rebar is started, you should add the following to your
+Rebar config:
+
+    {plugin_dir, "deps/rebar_vsn_plugin/src"}.
+
 Then add the semver version to the `<app-name>.app.src` file. It should go from something like
 
     {application, rebar_vsn_plugin,
