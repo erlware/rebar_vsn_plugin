@@ -1,6 +1,15 @@
 rebar_vsn_plugin
 ================
 
+NOTE
+----
+
+The rebar vsn plugin has a new feature where it can calculate a good
+version for for a Erlang app based solely on the *.app.src file. You
+no longer need to place `semver` in your version field unless you
+simply want to continue the old behaviour. The old behaviour is still
+fully supported.
+
 TLDR
 ----
 
@@ -28,7 +37,8 @@ Rebar config:
 
     {plugin_dir, "deps/rebar_vsn_plugin/src"}.
 
-Then add the semver version to the `<app-name>.app.src` file. It should go from something like
+Then add the semver version to the `<app-name>.app.src` file. It
+should go from something like:
 
     {application, rebar_vsn_plugin,
        [{description, "Correct version manipulation for rebar"},
@@ -37,7 +47,23 @@ Then add the semver version to the `<app-name>.app.src` file. It should go from 
         {registered, []},
         {applications, [kernel, stdlib]}]}.
 
-to this:
+to this the actual version you are interested in using.
+
+    {application, rebar_vsn_plugin,
+       [{description, "Correct version manipulation for rebar"},
+        {vsn, "0.0.5"},
+        {modules, []},
+        {registered, []},
+        {applications, [kernel, stdlib]}]}.
+
+The key change is having the version you wish to use `{vsn, "0.0.5"}`
+in the version field.
+
+If you wish to maintain the original 'tag oriented' behaviour you can
+replace `{vsn, git}` with `{vsn, "semver"}`. This will give you the
+same behaviour as the git approach, but with full semver versions.
+
+So your app file would look as follows:
 
     {application, rebar_vsn_plugin,
        [{description, "Correct version manipulation for rebar"},
@@ -46,9 +72,6 @@ to this:
         {registered, []},
         {applications, [kernel, stdlib]}]}.
 
-The key change is the `{vsn, "semver"}` change. This tells the plugin
-that it needs to replace the version in this app with the tag + ref
-version it employs.
 
 Explanation
 -------------

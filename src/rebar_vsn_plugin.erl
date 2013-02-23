@@ -33,9 +33,12 @@ post_compile(Config, AppFile) ->
         get_app_meta(Config, AppFile),
     case proplists:get_value(vsn, SrcDetail) of
         "semver" ->
-            do_vsn_replacement(AppName, Config, AppFile);
+            do_default_replacement(AppName, Config, AppFile);
         semver ->
-            do_vsn_replacement(AppName, Config, AppFile);
+            do_default_replacement(AppName, Config, AppFile);
+        Vsn when erlang:is_list(Vsn);
+                 erlang:is_binary(Vsn) ->
+            check_smart_replacement(AppName, Config, AppFile, Vsn);
         _ ->
             ok
     end.
@@ -43,12 +46,60 @@ post_compile(Config, AppFile) ->
 %%============================================================================
 %% Internal Functions
 %%============================================================================
+check_smart_replacement(AppName, Config, AppFile, Vsn) ->
+    case rebar_config:get_local(Config, plugins, []) of
+        [] ->
+            ok;
+        PluginList ->
+            case lists:member(?MODULE, PluginList) of
+                true ->
+                    do_smart_replacement(AppName, Config, AppFile, Vsn);
+                false ->
+                    ok
+            end
+    end.
 
-do_vsn_replacement(AppName, Config, AppFile) ->
-    EbinAppFile= filename:join("ebin", erlang:atom_to_list(AppName) ++ ".app"),
+do_smart_replacement(AppName, Config, AppFile, Vsn) ->
+    {ok, Cwd} = file:get_cwd(),
+    LocalAppFile = string:sub_string(AppFile, erlang:length(Cwd) + 2),
+    {Ref, _} = case get_revision_list(LocalAppFile) of
+                 [] ->
+                     {workspace, "0.0.0"};
+                 Revisions ->
+                     find_change_ref(Revisions, LocalAppFile, workspace, Vsn)
+               end,
+    figure_out_patch_version(Config, AppName, LocalAppFile, Ref, Vsn).
 
-    {AppName, Details0} = get_app_meta(Config, EbinAppFile),
+figure_out_patch_version(Config, AppName, AppFile, workspace, Vsn) ->
+    rewrite_vsn(Config, AppName, AppFile, Vsn, undefined, <<"0">>);
+figure_out_patch_version(Config, AppName, AppFile, Ref, Vsn) ->
+    RawCount = get_patch_count(Ref),
+    rewrite_vsn(Config, AppName, AppFile, Vsn, Ref, RawCount).
 
+find_change_ref([], _LocalAppFile, _LastRevision, _Vsn) ->
+    {no_ref, "0.0.0"};
+find_change_ref([FileRevision], _LocalAppFile, _LastRevision, Vsn) ->
+    {FileRevision, Vsn};
+find_change_ref([FileRevision | Rest], LocalAppFile, LastRevision, Vsn) ->
+    case get_version(FileRevision, LocalAppFile) of
+        Vsn ->
+            %% No change here
+            find_change_ref(Rest, LocalAppFile, FileRevision, Vsn);
+        DifferentVsn ->
+            {LastRevision, DifferentVsn}
+    end.
+
+get_version(NewestReversion, AppFile) ->
+    Contents = os:cmd(io_lib:format("git show ~s:~s~n", [NewestReversion, AppFile])),
+    {ok, Scanned, _} = erl_scan:string(Contents),
+    {ok, {application, _, AppMeta}} = erl_parse:parse_term(Scanned),
+    proplists:get_value(vsn, AppMeta).
+
+get_revision_list(AppFile) ->
+    string:tokens(os:cmd(io_lib:format("git log --format=%h -- ~s~n", [AppFile])),
+                  "\n\r").
+
+do_default_replacement(AppName, Config, AppFile) ->
     %% Get the tag timestamp and minimal ref from the system. The
     %% timestamp is really important from an ordering perspective.
     RawRef = os:cmd("git log -n 1 --pretty=format:'%h\n' "),
@@ -59,9 +110,14 @@ do_vsn_replacement(AppName, Config, AppFile) ->
             undefined ->
                 os:cmd("git rev-list HEAD | wc -l");
             _ ->
-                os:cmd(io_lib:format("git rev-list ~s..HEAD | wc -l",
-                                     [Tag]))
+                get_patch_count(RawRef)
         end,
+    rewrite_vsn(Config, AppName, AppFile, TagVsn, RawRef, RawCount).
+
+rewrite_vsn(Config, AppName, AppFile, Vsn, RawRef, RawCount) ->
+    EbinAppFile= filename:join("ebin", erlang:atom_to_list(AppName) ++ ".app"),
+
+    {AppName, Details0} = get_app_meta(Config, EbinAppFile),
 
     %% Cleanup the tag and the Ref information. Basically leading 'v's and
     %% whitespace needs to go away.
@@ -69,23 +125,25 @@ do_vsn_replacement(AppName, Config, AppFile) ->
     Count = erlang:iolist_to_binary(re:replace(RawCount, "\\s", "", [global])),
 
     %% Create the valid [semver](http://semver.org) version from the tag
-    Vsn = case Count of
-              <<"0">> ->
-                  erlang:binary_to_list(erlang:iolist_to_binary(TagVsn));
-              _ ->
-                  erlang:binary_to_list(erlang:iolist_to_binary([TagVsn, "+build.",
-                                                                 Count, ".", Ref]))
-          end,
+    NewVsn = case Count of
+                 <<"0">> ->
+                     erlang:binary_to_list(erlang:iolist_to_binary(Vsn));
+                 _ ->
+                     erlang:binary_to_list(erlang:iolist_to_binary([Vsn, "+build.",
+                                                                    Count, ".", Ref]))
+             end,
 
     %% Replace the old version with the new one
-    Details1 = lists:keyreplace(vsn, 1, Details0, {vsn, Vsn}),
+    Details1 = lists:keyreplace(vsn, 1, Details0, {vsn, NewVsn}),
 
     write_app_file(EbinAppFile, {application, AppName, Details1}),
     update_config(Config, AppName, AppFile, Details1).
 
-%%============================================================================
-%% Internal Functions
-%%============================================================================
+get_patch_count(RawRef) ->
+    Ref = re:replace(RawRef, "\\s", "", [global]),
+    Cmd = io_lib:format("git rev-list ~s..HEAD | wc -l",
+                         [Ref]),
+    os:cmd(Cmd).
 
 write_app_file(AppFile, AppTerms) ->
     AppHeader = "%%% -*- mode: Erlang; fill-column: 80; comment-column: 75; -*-\n\n",
@@ -95,8 +153,7 @@ parse_tags() ->
     first_valid_tag(os:cmd("git log --oneline --decorate  | fgrep \"tag: \" -1000")).
 
 first_valid_tag(Line) ->
-    case re:run(Line, "(\\(|\\s)tag:\\s((v([^,\\)]+)|((\\d+)(\\.(\\d+)(\\.(\\d+))?)?)))",
-                [{capture, [2, 3], list}]) of
+    case re:run(Line, "(\\(|\\s)tag:\\s(v([^,\\)]+))", [{capture, [2, 3], list}]) of
         {match,[Tag, Vsn]} ->
             {Tag, Vsn};
         nomatch ->
