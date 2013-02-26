@@ -125,7 +125,7 @@ rewrite_vsn(Config, AppName, AppFile, Vsn, RawRef, RawCount) ->
                  undefined ->
                      "";
                  RawRef ->
-                     [".", re:replace(RawRef, "\\s", "", [global])]
+                     [".ref", re:replace(RawRef, "\\s", "", [global])]
              end,
     Count = erlang:iolist_to_binary(re:replace(RawCount, "\\s", "", [global])),
 
