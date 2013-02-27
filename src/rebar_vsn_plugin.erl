@@ -121,8 +121,15 @@ rewrite_vsn(Config, AppName, AppFile, Vsn, RawRef, RawCount) ->
 
     %% Cleanup the tag and the Ref information. Basically leading 'v's and
     %% whitespace needs to go away.
-    Ref = re:replace(RawRef, "\\s", "", [global]),
+    RefTag = case RawRef of
+                 undefined ->
+                     "";
+                 RawRef ->
+                     [".", re:replace(RawRef, "\\s", "", [global])]
+             end,
     Count = erlang:iolist_to_binary(re:replace(RawCount, "\\s", "", [global])),
+
+
 
     %% Create the valid [semver](http://semver.org) version from the tag
     NewVsn = case Count of
@@ -130,7 +137,7 @@ rewrite_vsn(Config, AppName, AppFile, Vsn, RawRef, RawCount) ->
                      erlang:binary_to_list(erlang:iolist_to_binary(Vsn));
                  _ ->
                      erlang:binary_to_list(erlang:iolist_to_binary([Vsn, "+build.",
-                                                                    Count, ".", Ref]))
+                                                                    Count, RefTag]))
              end,
 
     %% Replace the old version with the new one
