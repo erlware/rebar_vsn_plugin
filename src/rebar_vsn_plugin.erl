@@ -29,9 +29,20 @@
 %% API
 %%============================================================================
 post_compile(Config, AppFile) ->
-    {AppName, SrcDetail} =
+  case rebar_app_utils:is_app_dir() of
+      {true, AppFile} ->
+          process_app_vsn(Config, AppFile);
+      _ ->
+          ok
+  end.
+
+%%============================================================================
+%% Internal Functions
+%%============================================================================
+process_app_vsn(Config, AppFile) ->
+      {AppName, SrcDetail} =
         get_app_meta(Config, AppFile),
-    case proplists:get_value(vsn, SrcDetail) of
+      case proplists:get_value(vsn, SrcDetail) of
         "semver" ->
             do_default_replacement(AppName, Config, AppFile);
         semver ->
@@ -43,9 +54,6 @@ post_compile(Config, AppFile) ->
             ok
     end.
 
-%%============================================================================
-%% Internal Functions
-%%============================================================================
 check_smart_replacement(AppName, Config, AppFile, Vsn) ->
     case rebar_config:get_local(Config, plugins, []) of
         [] ->
