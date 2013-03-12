@@ -29,9 +29,20 @@
 %% API
 %%============================================================================
 post_compile(Config, AppFile) ->
-    {AppName, SrcDetail} =
+  case rebar_app_utils:is_app_dir() of
+      {true, AppFile} ->
+          process_app_vsn(Config, AppFile);
+      _ ->
+          ok
+  end.
+
+%%============================================================================
+%% Internal Functions
+%%============================================================================
+process_app_vsn(Config, AppFile) ->
+      {AppName, SrcDetail} =
         get_app_meta(Config, AppFile),
-    case proplists:get_value(vsn, SrcDetail) of
+      case proplists:get_value(vsn, SrcDetail) of
         "semver" ->
             do_default_replacement(AppName, Config, AppFile);
         semver ->
@@ -43,9 +54,6 @@ post_compile(Config, AppFile) ->
             ok
     end.
 
-%%============================================================================
-%% Internal Functions
-%%============================================================================
 check_smart_replacement(AppName, Config, AppFile, Vsn) ->
     case rebar_config:get_local(Config, plugins, []) of
         [] ->
@@ -60,11 +68,11 @@ check_smart_replacement(AppName, Config, AppFile, Vsn) ->
     end.
 
 do_smart_replacement(AppName, Config, AppFile, Vsn) ->
-    {ok, Cwd} = file:get_cwd(),
-    LocalAppFile = string:sub_string(AppFile, erlang:length(Cwd) + 2),
-    {Ref, _} = case get_revision_list(LocalAppFile) of
+    GitTopLevel = get_git_root(),
+    LocalAppFile = string:sub_string(AppFile, erlang:length(GitTopLevel) + 1),
+    {Ref, _} = case get_revision_list(AppFile) of
                  [] ->
-                     {workspace, "0.0.0"};
+                       {workspace, "0.0.0"};
                  Revisions ->
                      find_change_ref(Revisions, LocalAppFile, workspace, Vsn)
                end,
@@ -96,8 +104,8 @@ get_version(NewestReversion, AppFile) ->
     proplists:get_value(vsn, AppMeta).
 
 get_revision_list(AppFile) ->
-    string:tokens(os:cmd(io_lib:format("git log --format=%h -- ~s~n", [AppFile])),
-                  "\n\r").
+   string:tokens(os:cmd(io_lib:format("git log --format=%h -- ~s~n", [AppFile])),
+                 "\n\r").
 
 do_default_replacement(AppName, Config, AppFile) ->
     %% Get the tag timestamp and minimal ref from the system. The
@@ -116,9 +124,7 @@ do_default_replacement(AppName, Config, AppFile) ->
 
 rewrite_vsn(Config, AppName, AppFile, Vsn, RawRef, RawCount) ->
     EbinAppFile= filename:join("ebin", erlang:atom_to_list(AppName) ++ ".app"),
-
     {AppName, Details0} = get_app_meta(Config, EbinAppFile),
-
     %% Cleanup the tag and the Ref information. Basically leading 'v's and
     %% whitespace needs to go away.
     RefTag = case RawRef of
@@ -129,8 +135,6 @@ rewrite_vsn(Config, AppName, AppFile, Vsn, RawRef, RawCount) ->
              end,
     Count = erlang:iolist_to_binary(re:replace(RawCount, "\\s", "", [global])),
 
-
-
     %% Create the valid [semver](http://semver.org) version from the tag
     NewVsn = case Count of
                  <<"0">> ->
@@ -139,10 +143,8 @@ rewrite_vsn(Config, AppName, AppFile, Vsn, RawRef, RawCount) ->
                      erlang:binary_to_list(erlang:iolist_to_binary([Vsn, "+build.",
                                                                     Count, RefTag]))
              end,
-
     %% Replace the old version with the new one
     Details1 = lists:keyreplace(vsn, 1, Details0, {vsn, NewVsn}),
-
     write_app_file(EbinAppFile, {application, AppName, Details1}),
     update_config(Config, AppName, AppFile, Details1).
 
@@ -188,3 +190,6 @@ get_app_meta(Config, EbinAppFile) ->
                     rebar_utils:abort("Unable to read app file ~s~n", [EbinAppFile])
             end
     end.
+
+get_git_root() ->
+    os:cmd("git rev-parse --show-toplevel").
