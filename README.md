@@ -25,7 +25,7 @@ Add the following dep specification to the deps tuple of your
 
     {rebar_vsn_plugin, "",
          {git, "https://github.com/erlware/rebar_vsn_plugin.git",
-          {tag, "master"}}},
+          {branch, "master"}}},
 
 Then inform rebar that you want this to be used as a plugin like so:
 
