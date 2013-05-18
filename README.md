@@ -5,7 +5,7 @@ NOTE
 ----
 
 The rebar vsn plugin has a new feature where it can calculate a good
-version for for a Erlang app based solely on the *.app.src file. You
+version for an Erlang app based solely on the *.app.src file. You
 no longer need to place `semver` in your version field unless you
 simply want to continue the old behaviour. The old behaviour is still
 fully supported.
@@ -25,7 +25,7 @@ Add the following dep specification to the deps tuple of your
 
     {rebar_vsn_plugin, "",
          {git, "https://github.com/erlware/rebar_vsn_plugin.git",
-          {tag, "master"}}},
+          {branch, "master"}}},
 
 Then inform rebar that you want this to be used as a plugin like so:
 
