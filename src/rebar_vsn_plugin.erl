@@ -28,6 +28,7 @@
 %%============================================================================
 %% API
 %%============================================================================
+post_compile(_, undefined) -> ok;  % Avoid apps with no AppFile
 post_compile(Config, AppFile) ->
   case rebar_app_utils:is_app_dir() of
       {true, AppFile} ->
