@@ -25,6 +25,9 @@
 
 -export([post_compile/2]).
 
+%% to integrate with another rebar plugins (like the ChicagoBoss' one)
+-export([make_vsn/0]).
+
 %%============================================================================
 %% API
 %%============================================================================
@@ -36,6 +39,11 @@ post_compile(Config, AppFile) ->
       _ ->
           ok
   end.
+
+%% Public function to build up a default VSN from wherever needed
+make_vsn() ->
+    {Vsn, RawRef, RawCount} = collect_default_refcount(),
+    build_vsn_string(Vsn, RawRef, RawCount).
 
 %%============================================================================
 %% Internal Functions
