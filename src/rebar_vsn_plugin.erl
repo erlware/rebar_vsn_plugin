@@ -40,17 +40,20 @@ post_compile(Config, AppFile) ->
 %% Internal Functions
 %%============================================================================
 process_app_vsn(Config, AppFile) ->
-      {AppName, SrcDetail} =
-        get_app_meta(Config, AppFile),
-      case proplists:get_value(vsn, SrcDetail) of
-        "semver" ->
-            do_default_replacement(AppName, Config, AppFile);
-        semver ->
-            do_default_replacement(AppName, Config, AppFile);
-        Vsn when erlang:is_list(Vsn);
-                 erlang:is_binary(Vsn) ->
-            check_smart_replacement(AppName, Config, AppFile, Vsn);
-        _ ->
+    case get_app_meta(Config, AppFile) of
+        {ok, {AppName, SrcDetail}} ->
+            case proplists:get_value(vsn, SrcDetail) of
+                "semver" ->
+                    do_default_replacement(AppName, Config, AppFile);
+                semver ->
+                    do_default_replacement(AppName, Config, AppFile);
+                Vsn when erlang:is_list(Vsn);
+                         erlang:is_binary(Vsn) ->
+                    check_smart_replacement(AppName, Config, AppFile, Vsn);
+                _ ->
+                    ok
+            end;
+        {error, _} ->
             ok
     end.
 
@@ -107,7 +110,7 @@ get_revision_list(AppFile) ->
    string:tokens(os:cmd(io_lib:format("git log --format=%h -- ~s~n", [AppFile])),
                  "\n\r").
 
-do_default_replacement(AppName, Config, AppFile) ->
+collect_default_refcount() ->
     %% Get the tag timestamp and minimal ref from the system. The
     %% timestamp is really important from an ordering perspective.
     RawRef = os:cmd("git log -n 1 --pretty=format:'%h\n' "),
@@ -120,11 +123,26 @@ do_default_replacement(AppName, Config, AppFile) ->
             _ ->
                 get_patch_count(RawRef)
         end,
+    {TagVsn, RawRef, RawCount}.
+
+do_default_replacement(AppName, Config, AppFile) ->
+    {TagVsn, RawRef, RawCount} = collect_default_refcount(),
     rewrite_vsn(Config, AppName, AppFile, TagVsn, RawRef, RawCount).
 
 rewrite_vsn(Config, AppName, AppFile, Vsn, RawRef, RawCount) ->
     EbinAppFile= filename:join("ebin", erlang:atom_to_list(AppName) ++ ".app"),
-    {AppName, Details0} = get_app_meta(Config, EbinAppFile),
+    case get_app_meta(Config, EbinAppFile) of
+        {ok, {AppName, Details0}} ->
+            NewVsn = build_vsn_string(Vsn, RawRef, RawCount),
+            %% Replace the old version with the new one
+            Details1 = lists:keyreplace(vsn, 1, Details0, {vsn, NewVsn}),
+            write_app_file(EbinAppFile, {application, AppName, Details1}),
+            update_config(Config, AppName, AppFile, Details1);
+        {error, _} ->
+            ok
+    end.
+
+build_vsn_string(Vsn, RawRef, RawCount) ->
     %% Cleanup the tag and the Ref information. Basically leading 'v's and
     %% whitespace needs to go away.
     RefTag = case RawRef of
@@ -136,17 +154,13 @@ rewrite_vsn(Config, AppName, AppFile, Vsn, RawRef, RawCount) ->
     Count = erlang:iolist_to_binary(re:replace(RawCount, "\\s", "", [global])),
 
     %% Create the valid [semver](http://semver.org) version from the tag
-    NewVsn = case Count of
-                 <<"0">> ->
-                     erlang:binary_to_list(erlang:iolist_to_binary(Vsn));
-                 _ ->
-                     erlang:binary_to_list(erlang:iolist_to_binary([Vsn, "+build.",
-                                                                    Count, RefTag]))
-             end,
-    %% Replace the old version with the new one
-    Details1 = lists:keyreplace(vsn, 1, Details0, {vsn, NewVsn}),
-    write_app_file(EbinAppFile, {application, AppName, Details1}),
-    update_config(Config, AppName, AppFile, Details1).
+    case Count of
+        <<"0">> ->
+            erlang:binary_to_list(erlang:iolist_to_binary(Vsn));
+        _ ->
+            erlang:binary_to_list(erlang:iolist_to_binary([Vsn, "+build.",
+                                                           Count, RefTag]))
+    end.
 
 get_patch_count(RawRef) ->
     Ref = re:replace(RawRef, "\\s", "", [global]),
@@ -181,13 +195,19 @@ update_config(Config, AppName, AppFile, Details) ->
 get_app_meta(Config, EbinAppFile) ->
     case lists:member({get_xconf, 2}, rebar_config:module_info(exports)) of
         true ->
-            rebar_config:get_xconf(Config, {appfile, {app_file, EbinAppFile}}, []);
+            {ok, rebar_config:get_xconf(Config, {appfile, {app_file, EbinAppFile}}, [])};
         false ->
             case file:consult(EbinAppFile) of
                 {ok, [{application, AppName, Details}]} ->
-                    {AppName, Details};
+                    {ok, {AppName, Details}};
+                {ok, _} ->
+                    rebar_log:log(warn, "Skipping non-app file: ~s~n", [EbinAppFile]),
+                    {error, non_app};
                 _ ->
-                    rebar_utils:abort("Unable to read app file ~s~n", [EbinAppFile])
+                    rebar_log:log(warn, "Unable to read app file: ~s~n", [EbinAppFile]),
+                    %% does our inability to read the .app file imply
+                    %% it is not an application at all?
+                    {error, non_app}
             end
     end.
 
