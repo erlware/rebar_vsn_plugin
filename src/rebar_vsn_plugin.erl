@@ -130,7 +130,7 @@ collect_default_refcount() ->
             undefined ->
                 os:cmd("git rev-list HEAD | wc -l");
             _ ->
-                get_patch_count(RawRef)
+                get_patch_count(Tag)
         end,
     {TagVsn, RawRef, RawCount}.
 
