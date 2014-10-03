@@ -204,7 +204,13 @@ first_valid_tag(Line) ->
         {match,[Tag, Vsn]} ->
             {Tag, Vsn};
         nomatch ->
-            {undefined, "0.0.0"}
+            RegEx = "(\\(|\\s)tag:\\s(([\\d+.\\d+.\\d+.\\d+]+|[\\d+.\\d+.\\d+]+))",
+            case re:run(Line, RegEx, [{capture, [2, 3], list}]) of
+                {match,[Tag, Vsn]} ->
+                    {Tag, Vsn};
+                nomatch ->
+                    {undefined, "0.0.0"}
+            end
     end.
 
 update_config(Config, AppName, AppFile, Details) ->
