@@ -163,12 +163,27 @@ build_vsn_string(Vsn, RawRef, RawCount) ->
     Count = erlang:iolist_to_binary(re:replace(RawCount, "\\s", "", [global])),
 
     %% Create the valid [semver](http://semver.org) version from the tag
-    case Count of
-        <<"0">> ->
-            erlang:binary_to_list(erlang:iolist_to_binary(Vsn));
-        _ ->
-            erlang:binary_to_list(erlang:iolist_to_binary([Vsn, "+build.",
-                                                           Count, RefTag]))
+    NewVsn = try
+        {CountPatch, _} = string:to_integer(erlang:binary_to_list(Count)),
+        inc_version(CountPatch, Vsn)
+    catch
+        error:badarg ->
+            [Vsn, "+build.", Count, RefTag]
+    end,
+    erlang:binary_to_list(erlang:iolist_to_binary(lists:flatten(NewVsn))).
+
+inc_version(0, Vsn) ->
+    Vsn;
+inc_version(CountPatch, Vsn) ->
+    case re:run(Vsn, "\\d+", [global]) of
+        {match, Captured} when length(Captured) < 4 ->
+            [Vsn, ".", erlang:integer_to_list(CountPatch)];
+        {match, Captured} ->
+            [{Start, Len}] = lists:nth(length(Captured), Captured),
+            LastNumStr = string:substr(Vsn, Start + 1, Len),
+            {LastNum, _} = string:to_integer(LastNumStr),
+            NewNum = erlang:integer_to_list(LastNum + CountPatch),
+            re:replace(Vsn, "\\d+", NewNum, [global, {offset, Start}])
     end.
 
 get_patch_count(RawRef) ->
@@ -185,11 +200,18 @@ parse_tags() ->
     first_valid_tag(os:cmd("git log --oneline --decorate  | fgrep \"tag: \" -1000")).
 
 first_valid_tag(Line) ->
-    case re:run(Line, "(\\(|\\s)tag:\\s(v([^,\\)]+))", [{capture, [2, 3], list}]) of
+    case re:run(Line, "(\\(|\\s)tag:\\s(v([^,\\)]+))",
+                [{capture, [2, 3], list}, unicode]) of
         {match,[Tag, Vsn]} ->
             {Tag, Vsn};
         nomatch ->
-            {undefined, "0.0.0"}
+            RegEx = "(\\(|\\s)tag:\\s(([\\d+.\\d+.\\d+.\\d+]+|[\\d+.\\d+.\\d+]+))",
+            case re:run(Line, RegEx, [{capture, [2, 3], list}, unicode]) of
+                {match,[Tag, Vsn]} ->
+                    {Tag, Vsn};
+                nomatch ->
+                    {undefined, "0.0.0"}
+            end
     end.
 
 update_config(Config, AppName, AppFile, Details) ->
