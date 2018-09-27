@@ -27,6 +27,7 @@
 
 %% to integrate with another rebar plugins (like the ChicagoBoss' one)
 -export([make_vsn/0]).
+-export([init/1]).
 
 %%============================================================================
 %% API
@@ -44,6 +45,12 @@ post_compile(Config, AppFile) ->
 make_vsn() ->
     {Vsn, RawRef, RawCount} = collect_default_refcount(),
     build_vsn_string(Vsn, RawRef, RawCount).
+
+-spec init(State) -> Res when
+    State :: rebar_state:t(),
+    Res :: rebar_state:t().
+init(State) ->
+    {ok, State}.
 
 %%============================================================================
 %% Internal Functions
